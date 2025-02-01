@@ -1,74 +1,107 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
+import { useEffect, useState } from 'react';
+import { FlatList, ActivityIndicator, StyleSheet, View, Image, TouchableOpacity, Linking } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+import axios from 'axios';
+import { FontAwesome } from '@expo/vector-icons';
+import {styles } from '../styles/globalStyles'
+import { fetchRepositories } from '@/services/gitapi';
+interface Repository {
+  id: number;
+  name: string;
+  description: string;
+  stargazers_count: number;
+  html_url: string;
+  owner: {
+    login: string;
+    avatar_url: string;
+    html_url: string;
+  };
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+export default function HomeScreen() {
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+
+  useEffect(() => {
+    loadRepositories(1);
+  }, []);
+
+  const loadRepositories = async (page: number) => {
+    if (isFetchingMore) return;
+
+    setIsFetchingMore(true);
+    try {
+      const response = await fetchRepositories(page);
+      setRepositories((prevRepos) => [...prevRepos, ...response]);
+      setPage(page);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setIsFetchingMore(false);
+      setLoading(false);
+    }
+  };
+
+  const openRepository = (url: string) => {
+    Linking.openURL(url);
+  };
+
+  const handleLoadMore = () => {
+    loadRepositories(page + 1);
+  };
+
+  const renderItem = ({ item }: { item: Repository }) => (
+    <ThemedView style={styles.item}>
+      <TouchableOpacity onPress={() => openRepository(item.html_url)} activeOpacity={0.7}>
+        <ThemedText type="title" style={styles.repoName}>
+          {item.name}
+        </ThemedText>
+      </TouchableOpacity>
+
+      <ThemedText type="default" style={styles.repoDescription}>
+        {item.description || 'No description available'}
+      </ThemedText>
+
+      <View style={styles.repoOwner}>
+        <TouchableOpacity onPress={() => openRepository(item.owner.html_url)} activeOpacity={0.7}>
+          <View style={styles.ownerContainer}>
+            <Image source={{ uri: item.owner.avatar_url }} style={styles.avatar} />
+            <ThemedText style={styles.ownerName}>{item.owner.login}</ThemedText>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.starContainer}>
+          <FontAwesome name="star" size={18} color="#FFD700" />
+          <ThemedText style={styles.repoStars}>{item.stargazers_count}</ThemedText>
+        </View>
+      </View>
+    </ThemedView>
+  );
+
+  return (
+    <ThemedView style={styles.container}>
+      <ThemedText style={styles.title} type="title">
+        Top Trending GitHub Repositories
+      </ThemedText>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#000" />
+      ) : (
+        <FlatList
+          data={repositories}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={isFetchingMore ? <ActivityIndicator size="small" color="#000" /> : null}
+        />
+      )}
+    </ThemedView>
+  );
+};
+
+
