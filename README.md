@@ -4,8 +4,8 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ## Get started
 
-1. Install dependencies
-
+1. Install dependencies. Install with node version 22 and above.
+   
    ```bash
    npm install
    ```
